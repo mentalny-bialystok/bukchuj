@@ -41,6 +41,22 @@ ve log stats --paper
 ve log export bets.csv
 ```
 
+### Lithuania workflow (books not covered by the API)
+
+Lithuania's licensed books (Top Sport, OlyBet, Betsafe, Optibet, Cbet) aren't in The Odds API, and Pinnacle/1xBet/bet365 are blacklisted there (their *prices* are still fine as reference data). So:
+
+```bash
+ve targets soccer_epl --min-edge 0.03 --csv targets.csv
+```
+
+prints, per outcome, the fair odds and the **minimum odds worth taking**. Check your licensed books; if one offers at least the target, log it as a paper bet with the sharp odds shown:
+
+```bash
+ve log add --sharp 2.05,3.50,3.90 --pick 0 --odds 2.20 --stake 1 --book optibet --event "Arsenal v Chelsea"
+```
+
+Then record closing odds before kick-off (`ve log close`) to measure CLV. A few hundred bets will show whether these books are soft enough to be worth it.
+
 Browser versions of the manual checker and backtester are in `web/`.
 
 ## Reading results honestly

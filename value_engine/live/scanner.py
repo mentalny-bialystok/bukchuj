@@ -129,3 +129,56 @@ def scan(events: Iterable[Event], cfg: ScanConfig = ScanConfig(), bankroll: floa
                     ))
     out.sort(key=lambda v: v.edge, reverse=True)
     return out
+
+
+@dataclass
+class Target:
+    """Minimum odds worth taking for one outcome, for books the API doesn't cover.
+
+    Compare `min_odds` against your bookmaker by eye: if it offers at least that,
+    the bet clears your edge threshold.
+    """
+    event: Event
+    market: str
+    outcome: str
+    outcome_index: int
+    outcome_names: list[str]
+    fair_p: float
+    fair_odds: float
+    min_odds: float
+    sharp_odds: list[float]
+    sharp_books_used: list[str]
+    starts_in: timedelta
+
+
+def targets(events: Iterable[Event], cfg: ScanConfig = ScanConfig(),
+            now: datetime | None = None) -> list[Target]:
+    """Fair-price sheet from the sharp books: min acceptable odds = fair_odds * (1 + min_edge)."""
+    now = now or datetime.now(timezone.utc)
+    out: list[Target] = []
+    for ev in events:
+        starts_in = ev.commence_time - now
+        mins = starts_in.total_seconds() / 60
+        if mins < cfg.min_minutes_to_start or mins > cfg.max_hours_to_start * 60:
+            continue
+        for mkey in cfg.markets:
+            prices = ev.markets.get(mkey, {})
+            names = None
+            for b in cfg.sharp_books:
+                if b in prices:
+                    names = outcome_order(ev, prices[b])
+                    break
+            if not names:
+                continue
+            res = _sharp_fair(prices, names, cfg)
+            if res is None:
+                continue
+            fair, _m, used, ref = res
+            for i, n in enumerate(names):
+                fo = 1 / fair[i]
+                tgt = fo * (1 + cfg.min_edge)
+                if not (cfg.min_odds <= tgt <= cfg.max_odds):
+                    continue
+                out.append(Target(ev, mkey, n, i, names, fair[i], fo, tgt, ref, used, starts_in))
+    out.sort(key=lambda t: (t.event.commence_time, t.event.id, t.outcome_index))
+    return out

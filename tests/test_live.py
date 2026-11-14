@@ -239,3 +239,17 @@ def test_cli_scan(tmp_path, monkeypatch):
                                   "--db", str(tmp_path / "b.db")])
     assert r.exit_code == 0, r.output
     assert "bet365" in r.output and "Logged paper bet #1" in r.output and "PAPER TRADING" in r.output
+
+
+def test_targets_sheet():
+    from value_engine.live.scanner import targets
+    ts = targets(parse_events(SAMPLE), ScanConfig(min_edge=0.03), now=NOW)
+    e1 = [t for t in ts if t.event.id == "e1"]
+    assert [t.outcome for t in e1] == ["Arsenal", "Draw", "Chelsea"]
+    for t in e1:
+        assert math.isclose(t.min_odds, t.fair_odds * 1.03)
+        assert t.fair_odds > 1 / (1 / 2.00) * 0.99  # fair odds are above sharp price (vig removed)
+    assert math.isclose(sum(t.fair_p for t in e1), 1.0)
+    # a soft price at the target exactly clears the threshold
+    t = e1[0]
+    assert math.isclose(t.fair_p * t.min_odds - 1, 0.03)

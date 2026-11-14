@@ -241,6 +241,58 @@ def scan_cmd(sport_key, api_key, regions, sharp, books, min_edge, max_edge, min_
     click.echo(PAPER_REMINDER)
 
 
+LT_BOOKS = "Top Sport, OlyBet, Betsafe, Optibet, Cbet"
+
+
+@main.command("targets")
+@click.argument("sport_key")
+@click.option("--api-key", envvar="ODDS_API_KEY", help="The Odds API key (or env ODDS_API_KEY).")
+@click.option("--sharp", default="pinnacle,betfair_ex_eu", show_default=True, help="Sharp book keys.")
+@click.option("--min-edge", type=float, default=0.03, show_default=True)
+@click.option("--min-odds", type=float, default=1.2, show_default=True)
+@click.option("--max-odds", type=float, default=6.0, show_default=True)
+@click.option("--max-hours", type=float, default=48.0, show_default=True, help="Only events starting within this.")
+@click.option("--cache-ttl", type=float, default=600.0, show_default=True)
+@click.option("--csv", "csv_path", type=click.Path(dir_okay=False), help="Also save the sheet as CSV.")
+@method_opt
+def targets_cmd(sport_key, api_key, sharp, min_edge, min_odds, max_odds, max_hours, cache_ttl, csv_path, method):
+    """Target-odds sheet for bookmakers the API doesn't cover (e.g. Lithuanian books).
+
+    For each outcome it shows the fair odds from the sharp books and the MINIMUM
+    odds worth taking. If your bookmaker offers at least the target, that's a value bet:
+    log it with `ve log add`, using the sharp odds shown.
+    """
+    from value_engine.live.odds_api import OddsAPI, OddsAPIError
+    from value_engine.live.scanner import ScanConfig, targets
+    c = _client(api_key, cache_ttl)
+    click.echo(f"Fetching {sport_key} sharp odds (costs ~{OddsAPI.estimated_cost('eu')} credit unless cached)...")
+    try:
+        events = c.get_odds(sport_key, regions="eu", bookmakers=sharp)
+    except OddsAPIError as e:
+        raise click.ClickException(str(e))
+    cfg = ScanConfig(sharp_books=tuple(s for s in sharp.split(",") if s), devig_method=method,
+                     min_edge=min_edge, min_odds=min_odds, max_odds=max_odds, max_hours_to_start=max_hours)
+    ts = targets(events, cfg)
+    if not ts:
+        click.echo("No events with usable sharp prices in that window.")
+    else:
+        rows = [[t.event.label, t.outcome, num(t.fair_odds), num(t.min_odds),
+                 ",".join(f"{o:.2f}" for o in t.sharp_odds), fmt_delta(t.starts_in)] for t in ts]
+        click.echo(table(rows, ["event", "outcome", "fair", "take if >=", "sharp odds (log these)", "starts"]))
+        if csv_path:
+            import csv
+            with open(csv_path, "w", newline="") as f:
+                w = csv.writer(f)
+                w.writerow(["kickoff", "event", "outcome", "fair_odds", "min_odds", "sharp_odds"])
+                for t in ts:
+                    w.writerow([t.event.commence_time.isoformat(), t.event.label, t.outcome,
+                                f"{t.fair_odds:.3f}", f"{t.min_odds:.3f}", ",".join(f"{o:.2f}" for o in t.sharp_odds)])
+            click.echo(f"Saved {csv_path}")
+    _quota(c)
+    click.echo(f"Compare against your licensed books ({LT_BOOKS}). Prices move: re-run close to betting.")
+    click.echo(PAPER_REMINDER)
+
+
 # ---------------------------------------------------------------- log
 @main.group("log")
 def log_grp():
