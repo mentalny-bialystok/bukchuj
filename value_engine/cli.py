@@ -81,6 +81,25 @@ db_opt = click.option("--db", default=lambda: os.environ.get("VE_DB", "data/bets
 @click.version_option(package_name="value-engine")
 def main():
     """Value engine: find soft-bookmaker prices that beat the sharp line. Paper trading first."""
+    load_dotenv()
+
+
+def load_dotenv(start: str | None = None) -> None:
+    """Load KEY=VALUE lines from the nearest .env (cwd or a parent) without overriding real env vars.
+
+    Keeps secrets like ODDS_API_KEY out of the code and out of git (.env is git-ignored).
+    """
+    from pathlib import Path
+    d = Path(start or os.getcwd()).resolve()
+    for folder in (d, *d.parents):
+        f = folder / ".env"
+        if f.is_file():
+            for line in f.read_text().splitlines():
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    os.environ.setdefault(k.strip(), v.strip().strip("'\""))
+            return
 
 
 # ---------------------------------------------------------------- devig

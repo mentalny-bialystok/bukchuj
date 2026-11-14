@@ -29,7 +29,7 @@ ve check --sharp 2.10,3.40,3.60 --pick 0 --soft 2.30 --bankroll 1000
 ve backtest data/*.csv --book B365 --walk-forward
 
 # Live scanning (free key from the-odds-api.com)
-export ODDS_API_KEY=...
+cp .env.example .env   # then put your key in .env (git-ignored)
 ve sports
 ve scan soccer_epl --bankroll 1000 --log --yes
 

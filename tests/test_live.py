@@ -253,3 +253,15 @@ def test_targets_sheet():
     # a soft price at the target exactly clears the threshold
     t = e1[0]
     assert math.isclose(t.fair_p * t.min_odds - 1, 0.03)
+
+
+def test_load_dotenv(tmp_path, monkeypatch):
+    from value_engine.cli import load_dotenv
+    (tmp_path / ".env").write_text("# comment\nVE_TEST_KEY='abc'\nVE_KEEP=file\n")
+    sub = tmp_path / "a" / "b"; sub.mkdir(parents=True)
+    monkeypatch.delenv("VE_TEST_KEY", raising=False)
+    monkeypatch.setenv("VE_KEEP", "env")
+    load_dotenv(str(sub))
+    import os
+    assert os.environ["VE_TEST_KEY"] == "abc" and os.environ["VE_KEEP"] == "env"
+    monkeypatch.delenv("VE_TEST_KEY")
