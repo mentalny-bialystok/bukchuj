@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Value engine backtester</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#E8EDF1; --card:#F7F9FA; --ink:#1B2A41; --muted:#5B6B80; --line:#C9D3DC;
+  --pos:#0E7C66; --neg:#B23A48; --amber:#B07D00; --field:#FFFFFF; --hi:#DCE7EF;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#121A26; --card:#1A2433; --ink:#E4EAF1; --muted:#93A3B8; --line:#2E3B4E;
+    --pos:#3CC4A2; --neg:#F07A88; --amber:#E8B84A; --field:#0F1620; --hi:#23324A; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#121A26; --card:#1A2433; --ink:#E4EAF1; --muted:#93A3B8; --line:#2E3B4E;
+  --pos:#3CC4A2; --neg:#F07A88; --amber:#E8B84A; --field:#0F1620; --hi:#23324A; color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font:16px/1.5 Archivo,system-ui,-apple-system,"Segoe UI",sans-serif;font-variant-numeric:tabular-nums}
+main{max-width:1080px;margin:0 auto;padding:20px 16px 48px}
+h1{font-size:2rem;font-weight:800;letter-spacing:-.02em;margin:8px 0 2px}
+h2{font-size:1.15rem;font-weight:600;margin:0 0 12px}
+.sub{color:var(--muted);margin:0 0 20px;max-width:68ch}
+section{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:18px;margin-top:16px}
+label{display:block;font-size:.85rem;color:var(--muted);margin-bottom:4px}
+input,select{width:100%;font:inherit;color:var(--ink);background:var(--field);border:1px solid var(--line);border-radius:4px;padding:8px 10px}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--amber);outline-offset:1px}
+.row{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:12px}
+button{font:inherit;font-weight:600;cursor:pointer;border-radius:4px;padding:9px 14px;border:1px solid var(--ink);background:var(--ink);color:var(--card)}
+button:disabled{opacity:.4;cursor:not-allowed}
+.note{font-size:.85rem;color:var(--muted);margin:8px 0 0;max-width:72ch}
+.note a{color:inherit}
+dl.nums{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px 16px;margin:0}
+dl.nums dt{font-size:.8rem;color:var(--muted)} dl.nums dd{margin:0;font-size:1.3rem;font-weight:600}
+.pos{color:var(--pos)} .neg{color:var(--neg)}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.9rem;min-width:640px}
+th,td{text-align:right;padding:7px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{font-weight:500;color:var(--muted);font-size:.8rem}
+tr.sel td{background:var(--hi)}
+tbody tr{cursor:pointer}
+.verdict{border-left:4px solid var(--line);padding:10px 14px;margin:0 0 16px;background:var(--paper);border-radius:0 4px 4px 0}
+.verdict.go{border-color:var(--pos)} .verdict.no{border-color:var(--neg)} .verdict.meh{border-color:var(--amber)}
+.verdict strong{display:block}
+svg text{fill:var(--muted);font:12px Archivo,system-ui,sans-serif}
+.files{font-size:.85rem;color:var(--muted);margin-top:6px}
+</style>
+</head>
+<body>
+<main>
+  <h1>Backtester</h1>
+  <p class="sub">Replay the sharp-vs-soft strategy on historical football odds. Fair probabilities come from Pinnacle’s pre-match odds; each bet is then graded on profit and on closing line value against Pinnacle’s de-vigged close.</p>
+
+  <section aria-labelledby="dataH">
+    <h2 id="dataH">Load data</h2>
+    <input type="file" id="file" accept=".csv,text/csv" multiple aria-label="Choose CSV files">
+    <div class="files" id="files">No files loaded.</div>
+    <p class="note">Download season CSVs from <a href="https://www.football-data.co.uk/data.php" target="_blank" rel="noopener">football-data.co.uk</a> (seasons 2019/20 onwards include Pinnacle closing odds). Load several leagues and seasons at once; more matches means a more trustworthy result. Files are read in your browser and never uploaded.</p>
+  </section>
+
+  <section aria-labelledby="setH">
+    <h2 id="setH">Strategy</h2>
+    <div class="row">
+      <div><label for="book">Soft price to bet at</label><select id="book"></select></div>
+      <div><label for="method">De-vig method</label>
+        <select id="method"><option value="mult">Multiplicative</option><option value="power" selected>Power</option><option value="shin">Shin</option></select></div>
+      <div><label for="maxOdds">Max odds</label><input id="maxOdds" inputmode="decimal" value="6"></div>
+      <div><label for="kelly">Kelly fraction</label><input id="kelly" inputmode="decimal" value="0.25"></div>
+      <div><label for="shrink">Edge shrink for staking</label><input id="shrink" inputmode="decimal" value="0.6"></div>
+    </div>
+    <button id="run" type="button" disabled>Run backtest</button>
+    <p class="note">Every combination of edge threshold (1–8%) is tested and shown below. Pick a row to see its detail. Choosing several thresholds and keeping the best is itself overfitting, so confirm a choice on seasons you did not tune on.</p>
+  </section>
+
+  <section aria-labelledby="gridH" id="gridSec" hidden>
+    <h2 id="gridH">Results by edge threshold</h2>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Min edge</th><th>Bets</th><th>Avg odds</th><th>Avg edge</th><th>Yield (flat)</th><th>Profit t</th><th>Avg CLV</th><th>CLV t</th><th>Beat close</th><th>Kelly growth</th></tr></thead>
+      <tbody id="grid"></tbody>
+    </table></div>
+  </section>
+
+  <section aria-labelledby="detH" id="detSec" hidden>
+    <h2 id="detH">Detail</h2>
+    <div id="verdict" class="verdict"></div>
+    <dl class="nums" id="det"></dl>
+    <div id="chart" style="margin-top:16px"></div>
+    <h2 style="margin-top:20px">By outcome</h2>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Outcome</th><th>Bets</th><th>Yield</th><th>Avg CLV</th><th>CLV t</th></tr></thead>
+      <tbody id="byOut"></tbody>
+    </table></div>
+    <h2 style="margin-top:20px">By league</h2>
+    <div class="tablewrap"><table>
+      <thead><tr><th>League</th><th>Bets</th><th>Yield</th><th>Avg CLV</th><th>CLV t</th></tr></thead>
+      <tbody id="byLg"></tbody>
+    </table></div>
+  </section>
+</main>
+
+<script>
+/* ---------- de-vig ---------- */
+function bisect(f,lo,hi){for(let i=0;i<100;i++){const m=(lo+hi)/2;(f(lo)*f(m)<=0)?hi=m:lo=m}return (lo+hi)/2}
+const DEVIG={
+  mult(o){const q=o.map(x=>1/x),s=q.reduce((a,b)=>a+b);return q.map(x=>x/s)},
+  power(o){const q=o.map(x=>1/x);const s=q.reduce((a,b)=>a+b);if(s<=1)return DEVIG.mult(o);
+    const k=bisect(k=>q.reduce((a,b)=>a+Math.pow(b,k),0)-1,1,10);return q.map(x=>Math.pow(x,k))},
+  shin(o){const q=o.map(x=>1/x),B=q.reduce((a,b)=>a+b);if(B<=1)return DEVIG.mult(o);
+    const P=z=>q.map(b=>(Math.sqrt(z*z+4*(1-z)*b*b/B)-z)/(2*(1-z)));
+    const z=bisect(z=>P(z).reduce((a,b)=>a+b)-1,0,0.4);return P(z)}
+};
+
+/* ---------- CSV ---------- */
+function parseCSV(t){
+  const lines=t.replace(/\r/g,'').split('\n').filter(l=>l.trim());
+  const h=lines[0].split(',').map(s=>s.trim().replace(/^\uFEFF/,''));
+  return lines.slice(1).map(l=>{const c=l.split(',');const o={};h.forEach((k,i)=>o[k]=c[i]);return o});
+}
+const BOOKS=[['Max','Best price across books (optimistic)'],['Avg','Market average'],['B365','Bet365'],['BW','Bet&Win'],['IW','Interwetten'],['WH','William Hill'],['VC','BetVictor'],['BF','Betfair Sportsbook'],['1XB','1xBet']];
+let rows=[];
+const $=id=>document.getElementById(id);
+$('file').addEventListener('change',async e=>{
+  rows=[];const names=[];
+  for(const f of e.target.files){const r=parseCSV(await f.text());rows.push(...r);names.push(`${f.name} (${r.length})`)}
+  const usable=rows.filter(r=>+r.PSH>1&&+r.PSCH>1&&r.FTR);
+  $('files').textContent=`${names.join(', ')}. ${usable.length} matches have Pinnacle opening and closing odds plus a result.`;
+  const cols=new Set(Object.keys(rows[0]||{}));
+  $('book').innerHTML=BOOKS.filter(([k])=>cols.has(k+'H')).map(([k,n])=>`<option value="${k}">${n}</option>`).join('');
+  $('run').disabled=!usable.length||!$('book').options.length;
+});
+
+/* ---------- stats ---------- */
+const mean=a=>a.reduce((x,y)=>x+y,0)/a.length;
+function tstat(a){if(a.length<3)return NaN;const m=mean(a);const v=a.reduce((s,x)=>s+(x-m)**2,0)/(a.length-1);return m/Math.sqrt(v/a.length)}
+const pct=(x,d=1)=>isFinite(x)?(x*100).toFixed(d)+'%':'–';
+const fx=(x,d=2)=>isFinite(x)?x.toFixed(d):'–';
+const cls=x=>x>0?'pos':x<0?'neg':'';
+
+/* ---------- backtest ---------- */
+let RES=[];
+function candidates(){
+  const bk=$('book').value, dv=DEVIG[$('method').value], maxO=+$('maxOdds').value||99;
+  const out=[];const OUT=['H','D','A'];
+  for(const r of rows){
+    const sharp=OUT.map(k=>+r['PS'+k]), close=OUT.map(k=>+r['PSC'+k]), soft=OUT.map(k=>+r[bk+k]);
+    if(!sharp.every(x=>x>1)||!close.every(x=>x>1)||!r.FTR)continue;
+    const fp=dv(sharp), cp=dv(close);
+    OUT.forEach((k,i)=>{
+      const o=soft[i];if(!(o>1)||o>maxO)return;
+      const edge=fp[i]*o-1;if(edge<=0)return;
+      out.push({date:r.Date,lg:r.Div||'?',out:k,odds:o,edge,clv:o*cp[i]-1,win:r.FTR===k,p:fp[i]});
+    });
+  }
+  out.sort((a,b)=>dkey(a.date)-dkey(b.date));
+  return out;
+}
+function dkey(d){if(!d)return 0;const [a,b,c]=d.split('/');const y=c.length===2?2000+ +c:+c;return y*10000+ +b*100+ +a}
+function evaluate(bets){
+  const kf=+$('kelly').value||0.25, sh=+$('shrink').value||1;
+  const pl=bets.map(b=>b.win?b.odds-1:-1), clv=bets.map(b=>b.clv);
+  let logB=0;
+  for(const b of bets){let f=kf*(b.edge*sh)/(b.odds-1);f=Math.min(f,0.05);logB+=Math.log(1+(b.win?f*(b.odds-1):-f))}
+  return {n:bets.length,avgOdds:mean(bets.map(b=>b.odds)),avgEdge:mean(bets.map(b=>b.edge)),
+    yld:mean(pl),pt:tstat(pl),clv:mean(clv),ct:tstat(clv),beat:mean(clv.map(c=>c>0?1:0)),growth:Math.exp(logB)-1,pl,bets};
+}
+$('run').onclick=()=>{
+  const c=candidates();
+  RES=[1,2,3,4,5,6,8].map(t=>({t,...evaluate(c.filter(b=>b.edge>=t/100))})).filter(r=>r.n>0);
+  $('gridSec').hidden=false;
+  renderGrid(RES.find(r=>r.t===3)?3:RES[0]?.t);
+};
+function renderGrid(sel){
+  $('grid').innerHTML=RES.length?RES.map(r=>`<tr data-t="${r.t}" class="${r.t===sel?'sel':''}" tabindex="0">
+    <td>${r.t}%</td><td>${r.n}</td><td>${fx(r.avgOdds)}</td><td>${pct(r.avgEdge)}</td>
+    <td class="${cls(r.yld)}">${pct(r.yld,2)}</td><td>${fx(r.pt)}</td>
+    <td class="${cls(r.clv)}">${pct(r.clv,2)}</td><td>${fx(r.ct)}</td><td>${pct(r.beat,0)}</td>
+    <td class="${cls(r.growth)}">${pct(r.growth,1)}</td></tr>`).join('')
+    :'<tr><td colspan="10">No bets met any threshold. Try a different soft price or more data.</td></tr>';
+  $('grid').querySelectorAll('tr[data-t]').forEach(tr=>{const go=()=>renderGrid(+tr.dataset.t);tr.onclick=go;tr.onkeydown=e=>{if(e.key==='Enter')go()}});
+  const r=RES.find(x=>x.t===sel);if(r)detail(r);
+}
+function groupTable(bets,key,label){
+  const g={};bets.forEach(b=>(g[b[key]]=g[b[key]]||[]).push(b));
+  return Object.entries(g).sort((a,b)=>b[1].length-a[1].length).map(([k,a])=>{
+    const pl=a.map(b=>b.win?b.odds-1:-1),c=a.map(b=>b.clv);
+    return `<tr><td>${label?label[k]||k:k}</td><td>${a.length}</td><td class="${cls(mean(pl))}">${pct(mean(pl),2)}</td><td class="${cls(mean(c))}">${pct(mean(c),2)}</td><td>${fx(tstat(c))}</td></tr>`}).join('');
+}
+function detail(r){
+  $('detSec').hidden=false;
+  const v=$('verdict');
+  if(r.n<100){v.className='verdict meh';v.innerHTML=`<strong>Too few bets (${r.n}) to judge.</strong>Load more seasons or leagues.`}
+  else if(r.ct>3&&r.clv>0){v.className='verdict go';v.innerHTML=`<strong>Strong evidence these bets beat the close.</strong>CLV t-statistic ${fx(r.ct)} on ${r.n} bets. ${r.pt>2?'Profit is also significant.':'Profit is not yet statistically significant, which is normal: it needs far more bets than CLV.'}`}
+  else if(r.ct>2&&r.clv>0){v.className='verdict meh';v.innerHTML=`<strong>Promising but not conclusive.</strong>CLV is positive (t ${fx(r.ct)}); with several thresholds tested, confirm on unseen seasons.`}
+  else{v.className='verdict no';v.innerHTML=`<strong>No reliable edge at this setting.</strong>CLV ${pct(r.clv,2)} with t ${fx(r.ct)}.`}
+  $('det').innerHTML=[['Bets',r.n],['Flat-stake profit',fx(r.pl.reduce((a,b)=>a+b,0),1)+' u'],['Yield',pct(r.yld,2)],['Expected yield (edge)',pct(r.avgEdge,2)],
+    ['Avg CLV',pct(r.clv,2)],['Beat the close',pct(r.beat,0)],['Kelly bankroll growth',pct(r.growth,1)]]
+    .map(([k,x])=>`<div><dt>${k}</dt><dd>${x}</dd></div>`).join('');
+  $('byOut').innerHTML=groupTable(r.bets,'out',{H:'Home',D:'Draw',A:'Away'});
+  $('byLg').innerHTML=groupTable(r.bets,'lg');
+  chart(r);
+}
+function chart(r){
+  let c=0,e=0,cl=0;const A=[0],E=[0],C=[0];
+  r.bets.forEach((b,i)=>{c+=r.pl[i];e+=b.edge;cl+=b.clv;A.push(c);E.push(e);C.push(cl)});
+  const W=1000,H=280,P=56,all=A.concat(E,C),mn=Math.min(0,...all),mx=Math.max(0,...all),rg=(mx-mn)||1;
+  const x=i=>P+i*(W-P-10)/(A.length-1||1),y=v=>10+(H-44)*(1-(v-mn)/rg);
+  const path=a=>a.map((v,i)=>(i?'L':'M')+x(i).toFixed(1)+' '+y(v).toFixed(1)).join('');
+  $('chart').innerHTML=`<div style="overflow-x:auto"><svg viewBox="0 0 ${W} ${H}" style="width:100%;min-width:480px;height:auto" role="img" aria-label="Cumulative profit, expected profit and CLV in units">
+   <line x1="${P}" x2="${W-10}" y1="${y(0)}" y2="${y(0)}" stroke="var(--line)"/>
+   <text x="0" y="${y(mx)+4}">${mx.toFixed(0)} u</text><text x="0" y="${y(mn)+4}">${mn.toFixed(0)} u</text>
+   <path d="${path(E)}" fill="none" stroke="var(--muted)" stroke-width="2" stroke-dasharray="6 5"/>
+   <path d="${path(C)}" fill="none" stroke="var(--amber)" stroke-width="2"/>
+   <path d="${path(A)}" fill="none" stroke="${c>=0?'var(--pos)':'var(--neg)'}" stroke-width="2.5"/>
+   <text x="${P}" y="${H-8}">Solid: actual profit. Amber: cumulative CLV. Dashed: expected from edge at bet time. Flat 1-unit stakes.</text></svg></div>`;
+}
+</script>
+</body>
+</html>

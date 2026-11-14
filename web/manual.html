@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Value engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#E8EDF1; --card:#F7F9FA; --ink:#1B2A41; --muted:#5B6B80; --line:#C9D3DC;
+  --pos:#0E7C66; --neg:#B23A48; --amber:#B07D00; --field:#FFFFFF;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#121A26; --card:#1A2433; --ink:#E4EAF1; --muted:#93A3B8; --line:#2E3B4E;
+    --pos:#3CC4A2; --neg:#F07A88; --amber:#E8B84A; --field:#0F1620; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#121A26; --card:#1A2433; --ink:#E4EAF1; --muted:#93A3B8; --line:#2E3B4E;
+  --pos:#3CC4A2; --neg:#F07A88; --amber:#E8B84A; --field:#0F1620; color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font:16px/1.5 Archivo,system-ui,-apple-system,"Segoe UI",sans-serif;font-variant-numeric:tabular-nums}
+main{max-width:1080px;margin:0 auto;padding:20px 16px 48px}
+h1{font-size:2rem;font-weight:800;letter-spacing:-.02em;margin:8px 0 2px}
+h2{font-size:1.15rem;font-weight:600;margin:0 0 12px}
+.sub{color:var(--muted);margin:0 0 20px;max-width:64ch}
+.grid{display:grid;gap:16px;grid-template-columns:1fr}
+@media (min-width:860px){.grid{grid-template-columns:1.1fr .9fr}}
+section{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:18px}
+label{display:block;font-size:.85rem;color:var(--muted);margin-bottom:4px}
+input,select{width:100%;font:inherit;color:var(--ink);background:var(--field);
+  border:1px solid var(--line);border-radius:4px;padding:8px 10px}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--amber);outline-offset:1px}
+.row{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));margin-bottom:12px}
+.outcomes{display:grid;gap:8px;margin-bottom:12px}
+.oc{display:grid;grid-template-columns:28px 1fr 1fr;gap:8px;align-items:center}
+.oc input[type=radio]{width:18px;height:18px;accent-color:var(--ink)}
+.ochead{font-size:.8rem;color:var(--muted);display:grid;grid-template-columns:28px 1fr 1fr;gap:8px}
+button{font:inherit;font-weight:600;cursor:pointer;border-radius:4px;padding:9px 14px;
+  border:1px solid var(--ink);background:var(--ink);color:var(--card)}
+button.ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+button:disabled{opacity:.4;cursor:not-allowed}
+.verdict{border-left:4px solid var(--line);padding:10px 14px;margin:14px 0;background:var(--paper);border-radius:0 4px 4px 0}
+.verdict.go{border-color:var(--pos)} .verdict.no{border-color:var(--neg)}
+.verdict strong{display:block;font-size:1.05rem}
+dl.nums{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px 16px;margin:0}
+dl.nums dt{font-size:.8rem;color:var(--muted)} dl.nums dd{margin:0;font-size:1.25rem;font-weight:600}
+.pos{color:var(--pos)} .neg{color:var(--neg)}
+.big{font-size:2.6rem;font-weight:800;letter-spacing:-.03em;line-height:1}
+.tablewrap{overflow-x:auto;margin-top:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;min-width:900px}
+th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-weight:500;color:var(--muted);font-size:.8rem}
+td select,td input{padding:4px 6px;font-size:.85rem}
+td input.close{width:150px}
+.tools{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.empty{color:var(--muted);padding:18px 0}
+svg text{fill:var(--muted);font:12px Archivo,system-ui,sans-serif}
+.note{font-size:.85rem;color:var(--muted);margin-top:10px}
+.tag{font-size:.75rem;border:1px solid var(--line);border-radius:3px;padding:1px 5px;color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+  <h1>Value engine</h1>
+  <p class="sub">De-vig a sharp book, compare to a soft price, size with fractional Kelly, then judge yourself on closing line value. Paper trade until CLV is consistently positive.</p>
+
+  <div class="grid">
+    <section aria-labelledby="scanH">
+      <h2 id="scanH">Check a price</h2>
+      <div class="row">
+        <div><label for="event">Event</label><input id="event" placeholder="Ajax v PSV"></div>
+        <div><label for="sport">Sport / market</label><input id="sport" placeholder="Eredivisie 1X2"></div>
+      </div>
+
+      <div class="ochead"><span></span><span>Outcome</span><span>Sharp odds (Pinnacle / exchange)</span></div>
+      <div class="outcomes" id="outcomes"></div>
+      <div class="tools" style="margin:0 0 14px">
+        <button class="ghost" id="two" type="button">2-way</button>
+        <button class="ghost" id="three" type="button">3-way</button>
+      </div>
+
+      <div class="row">
+        <div><label for="soft">Soft odds for selected outcome</label><input id="soft" inputmode="decimal" placeholder="2.30"></div>
+        <div><label for="book">Soft bookie</label><input id="book" placeholder="Unibet"></div>
+      </div>
+
+      <div id="verdict" class="verdict"><strong>Enter sharp odds for every outcome and a soft price.</strong></div>
+      <dl class="nums">
+        <div><dt>Sharp margin</dt><dd id="mVig">–</dd></div>
+        <div><dt>Fair probability</dt><dd id="mP">–</dd></div>
+        <div><dt>Fair odds</dt><dd id="mFair">–</dd></div>
+        <div><dt>Edge</dt><dd id="mEdge">–</dd></div>
+        <div><dt>Stake</dt><dd id="mStake">–</dd></div>
+      </dl>
+      <div class="tools">
+        <button id="logBtn" type="button" disabled>Log paper bet</button>
+        <button class="ghost" id="logReal" type="button" disabled>Log real bet</button>
+        <button class="ghost" id="clearForm" type="button">Clear</button>
+      </div>
+    </section>
+
+    <section aria-labelledby="setH">
+      <h2 id="setH">Bankroll and rules</h2>
+      <div class="row">
+        <div><label for="bank0">Starting bankroll (€)</label><input id="bank0" inputmode="decimal"></div>
+        <div><label for="kelly">Kelly fraction</label><input id="kelly" inputmode="decimal"></div>
+        <div><label for="thr">Min edge (%)</label><input id="thr" inputmode="decimal"></div>
+        <div><label for="cap">Max stake (% bankroll)</label><input id="cap" inputmode="decimal"></div>
+      </div>
+      <p class="note">Stakes use current bankroll (start + settled profit). The cap guards against a bad sharp price producing a huge Kelly stake.</p>
+      <div style="margin-top:18px">
+        <div class="note" style="margin:0">Average CLV (bets with a closing price)</div>
+        <div class="big" id="bigClv">–</div>
+        <div class="note" id="clvNote">Log bets, then enter the sharp closing odds just before kick-off.</div>
+      </div>
+    </section>
+  </div>
+
+  <section style="margin-top:16px" aria-labelledby="statsH">
+    <h2 id="statsH">Results</h2>
+    <dl class="nums" id="stats"></dl>
+    <div id="chart" style="margin-top:16px"></div>
+  </section>
+
+  <section style="margin-top:16px" aria-labelledby="logH">
+    <h2 id="logH">Bet log</h2>
+    <div class="row" style="max-width:420px">
+      <div><label for="filter">Show</label>
+        <select id="filter"><option value="all">All bets</option><option value="paper">Paper only</option><option value="real">Real only</option></select></div>
+    </div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Date</th><th>Event</th><th>Pick</th><th>Book</th><th>Odds</th><th>Fair p</th><th>Edge</th><th>Stake</th><th>Closing sharp odds (all outcomes)</th><th>CLV</th><th>Result</th><th>P/L</th><th></th></tr></thead>
+      <tbody id="log"></tbody>
+    </table></div>
+    <div class="tools">
+      <button class="ghost" id="exportCsv" type="button">Export CSV</button>
+      <button class="ghost" id="exportJson" type="button">Copy backup (JSON)</button>
+      <button class="ghost" id="importJson" type="button">Restore backup</button>
+    </div>
+    <p class="note">Data lives in this browser only. Copy a backup now and then. CLV = odds taken × de-vigged closing probability − 1.</p>
+  </section>
+</main>
+
+<script>
+const KEY='ve-state-v1';
+const def={settings:{bank0:1000,kelly:0.25,thr:3,cap:2},bets:[]};
+let S=load();
+function load(){try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.bets)return s}catch(e){}return structuredClone(def)}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+const $=id=>document.getElementById(id);
+const num=v=>{const n=parseFloat(String(v).replace(',','.'));return isFinite(n)?n:NaN};
+const pct=(x,d=1)=>isFinite(x)?(x*100).toFixed(d)+'%':'–';
+const eur=x=>isFinite(x)?(x<0?'−€':'€')+Math.abs(x).toFixed(2):'–';
+const cls=x=>x>0?'pos':x<0?'neg':'';
+
+/* ---- core math ---- */
+function devig(odds){const inv=odds.map(o=>1/o);const s=inv.reduce((a,b)=>a+b,0);return{fair:inv.map(i=>i/s),margin:s-1}}
+function parseList(t){const a=String(t).split(/[\s,;\/]+/).filter(Boolean).map(num);return a.length>=2&&a.every(o=>o>1)?a:null}
+function settledProfit(){return S.bets.reduce((a,b)=>a+(b.pl||0),0)}
+function bankroll(){return S.settings.bank0+settledProfit()}
+
+/* ---- settings ---- */
+['bank0','kelly','thr','cap'].forEach(k=>{const el=$(k);el.value=S.settings[k];
+  el.addEventListener('input',()=>{const v=num(el.value);if(isFinite(v)&&v>=0){S.settings[k]=v;save();calc();render()}})});
+
+/* ---- outcomes ---- */
+let nOut=3;
+function buildOutcomes(n,keep){
+  const old=keep?[...document.querySelectorAll('.oc')].map(r=>({name:r.querySelector('.nm').value,odds:r.querySelector('.od').value})):[];
+  const sel=document.querySelector('input[name=pick]:checked');const selIdx=sel?+sel.value:0;
+  nOut=n;const names=n===3?['Home','Draw','Away']:['Side A','Side B'];
+  $('outcomes').innerHTML=names.map((nm,i)=>`<div class="oc">
+    <input type="radio" name="pick" value="${i}" aria-label="Bet on outcome ${i+1}" ${i===Math.min(selIdx,n-1)?'checked':''}>
+    <input class="nm" aria-label="Outcome ${i+1} name" value="${(old[i]&&old[i].name)||nm}">
+    <input class="od" aria-label="Outcome ${i+1} sharp odds" inputmode="decimal" placeholder="e.g. 2.10" value="${(old[i]&&old[i].odds)||''}"></div>`).join('');
+  $('outcomes').querySelectorAll('input').forEach(i=>i.addEventListener('input',calc));
+  calc();
+}
+$('two').onclick=()=>buildOutcomes(2,true);
+$('three').onclick=()=>buildOutcomes(3,true);
+['soft','event','sport','book'].forEach(id=>$(id).addEventListener('input',calc));
+
+let current=null;
+function calc(){
+  current=null;
+  const rows=[...document.querySelectorAll('.oc')];
+  const odds=rows.map(r=>num(r.querySelector('.od').value));
+  const pick=+document.querySelector('input[name=pick]:checked').value;
+  const soft=num($('soft').value);
+  const v=$('verdict');
+  ['mVig','mP','mFair','mEdge','mStake'].forEach(id=>{$(id).textContent='–';$(id).className=''});
+  $('logBtn').disabled=$('logReal').disabled=true;
+  if(!odds.every(o=>o>1)){v.className='verdict';v.innerHTML='<strong>Enter sharp odds for every outcome and a soft price.</strong>';return}
+  const {fair,margin}=devig(odds);const p=fair[pick];
+  $('mVig').textContent=pct(margin,2);$('mP').textContent=pct(p,2);$('mFair').textContent=(1/p).toFixed(3);
+  if(!(soft>1)){v.className='verdict';v.innerHTML='<strong>Now enter the soft bookie’s odds for the selected outcome.</strong>';return}
+  const edge=p*soft-1;
+  const st=S.settings, br=bankroll();
+  let stake=edge>0?br*st.kelly*edge/(soft-1):0;
+  const capped=stake>br*st.cap/100; if(capped)stake=br*st.cap/100;
+  stake=Math.max(0,Math.floor(stake*100)/100);
+  $('mEdge').textContent=pct(edge,2);$('mEdge').className=cls(edge);
+  $('mStake').textContent=eur(stake)+(capped?' (cap)':'');
+  const ok=edge*100>=st.thr&&stake>0;
+  v.className='verdict '+(ok?'go':'no');
+  v.innerHTML=ok?`<strong>Value: ${pct(edge,2)} edge clears your ${st.thr}% threshold.</strong>Fair odds ${(1/p).toFixed(2)} vs ${soft.toFixed(2)} offered.`
+    :`<strong>No bet.</strong>${edge>0?`Edge of ${pct(edge,2)} is below your ${st.thr}% threshold.`:`Soft price ${soft.toFixed(2)} is at or below fair odds ${(1/p).toFixed(2)}.`}`;
+  current={odds,pick,p,soft,edge,stake,margin,names:rows.map(r=>r.querySelector('.nm').value)};
+  $('logBtn').disabled=$('logReal').disabled=!(stake>0);
+}
+
+function logBet(real){
+  if(!current)return;
+  S.bets.unshift({id:Date.now().toString(36),date:new Date().toISOString().slice(0,10),
+    event:$('event').value||'Untitled',market:$('sport').value,book:$('book').value||'?',
+    pick:current.names[current.pick],pickIdx:current.pick,odds:current.soft,sharpOpen:current.odds,
+    p:current.p,edge:current.edge,stake:current.stake,closeTxt:'',clv:null,result:'pending',pl:0,real:!!real});
+  save();render();
+}
+$('logBtn').onclick=()=>logBet(false);
+$('logReal').onclick=()=>{if(confirm('Log this as a real-money bet?'))logBet(true)};
+$('clearForm').onclick=()=>{['event','sport','soft','book'].forEach(i=>$(i).value='');document.querySelectorAll('.od').forEach(i=>i.value='');calc()};
+
+/* ---- log ---- */
+function plOf(b){return b.result==='win'?b.stake*(b.odds-1):b.result==='loss'?-b.stake:0}
+function render(){
+  const f=$('filter').value;
+  const bets=S.bets.filter(b=>f==='all'||(f==='real'?b.real:!b.real));
+  const tb=$('log');
+  if(!bets.length){tb.innerHTML=`<tr><td colspan="13" class="empty">No bets yet. Check a price above and log it as a paper bet.</td></tr>`}
+  else tb.innerHTML=bets.map(b=>`<tr data-id="${b.id}">
+    <td>${b.date}</td><td>${esc(b.event)}${b.real?' <span class="tag">real</span>':''}</td><td>${esc(b.pick)}</td><td>${esc(b.book)}</td>
+    <td>${b.odds.toFixed(2)}</td><td>${pct(b.p,1)}</td><td class="${cls(b.edge)}">${pct(b.edge,1)}</td><td>${eur(b.stake)}</td>
+    <td><input class="close" aria-label="Closing sharp odds" placeholder="${b.sharpOpen.map(()=>'x.xx').join(', ')}" value="${esc(b.closeTxt)}"></td>
+    <td class="${cls(b.clv)}">${b.clv==null?'–':pct(b.clv,1)}</td>
+    <td><select aria-label="Result">${['pending','win','loss','void'].map(r=>`<option ${r===b.result?'selected':''}>${r}</option>`).join('')}</select></td>
+    <td class="${cls(b.pl)}">${b.result==='pending'?'–':eur(b.pl)}</td>
+    <td><button class="ghost" data-del aria-label="Delete bet">✕</button></td></tr>`).join('');
+  tb.querySelectorAll('tr[data-id]').forEach(tr=>{
+    const b=S.bets.find(x=>x.id===tr.dataset.id);
+    tr.querySelector('.close').addEventListener('change',e=>{
+      b.closeTxt=e.target.value.trim();const l=parseList(b.closeTxt);
+      b.clv=l&&l.length===b.sharpOpen.length?b.odds*devig(l).fair[b.pickIdx]-1:null;save();render()});
+    tr.querySelector('select').addEventListener('change',e=>{b.result=e.target.value;b.pl=plOf(b);save();render();calc()});
+    tr.querySelector('[data-del]').addEventListener('click',()=>{if(confirm('Delete this bet?')){S.bets=S.bets.filter(x=>x!==b);save();render();calc()}});
+  });
+  stats(bets);
+}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+
+function stats(bets){
+  const settled=bets.filter(b=>b.result!=='pending');
+  const staked=settled.filter(b=>b.result!=='void').reduce((a,b)=>a+b.stake,0);
+  const profit=settled.reduce((a,b)=>a+b.pl,0);
+  const wc=bets.filter(b=>b.clv!=null);
+  const avgClv=wc.length?wc.reduce((a,b)=>a+b.clv,0)/wc.length:NaN;
+  const beat=wc.length?wc.filter(b=>b.clv>0).length/wc.length:NaN;
+  const avgEdge=bets.length?bets.reduce((a,b)=>a+b.edge,0)/bets.length:NaN;
+  const exp=settled.filter(b=>b.result!=='void').reduce((a,b)=>a+b.stake*b.edge,0);
+  const items=[['Bets',bets.length],['Settled',settled.length],['Staked',eur(staked)],
+    ['Profit',eur(profit),profit],['Yield',staked?pct(profit/staked,2):'–',profit],
+    ['Expected profit',eur(exp),exp],['Avg edge at bet',pct(avgEdge,2),avgEdge],
+    ['Beat the close',isFinite(beat)?pct(beat,0):'–'],['Bankroll',eur(bankroll())]];
+  $('stats').innerHTML=items.map(([k,v,s])=>`<div><dt>${k}</dt><dd class="${s!=null?cls(s):''}">${v}</dd></div>`).join('');
+  $('bigClv').textContent=isFinite(avgClv)?(avgClv>0?'+':'')+pct(avgClv,2):'–';
+  $('bigClv').className='big '+cls(avgClv);
+  $('clvNote').textContent=wc.length?`Across ${wc.length} bet${wc.length>1?'s':''}. Under ~200 bets this is still noisy; positive CLV over hundreds of bets is the real signal.`
+    :'Log bets, then enter the sharp closing odds just before kick-off.';
+  chart(settled.slice().reverse());
+}
+
+function chart(s){
+  const el=$('chart');
+  if(s.length<2){el.innerHTML='<p class="note">The cumulative profit chart appears after two settled bets.</p>';return}
+  let c=0,e=0;const act=[0],ex=[0];
+  s.forEach(b=>{c+=b.pl;act.push(c);if(b.result!=='void')e+=b.stake*b.edge;ex.push(e)});
+  const W=1000,H=260,P=40,all=act.concat(ex),mn=Math.min(0,...all),mx=Math.max(0,...all),rg=(mx-mn)||1;
+  const x=i=>P+i*(W-P-10)/(act.length-1),y=v=>10+(H-40)*(1-(v-mn)/rg);
+  const path=a=>a.map((v,i)=>(i?'L':'M')+x(i).toFixed(1)+' '+y(v).toFixed(1)).join('');
+  el.innerHTML=`<div style="overflow-x:auto"><svg viewBox="0 0 ${W} ${H}" style="width:100%;min-width:480px;height:auto" role="img" aria-label="Cumulative profit versus expected profit">
+    <line x1="${P}" x2="${W-10}" y1="${y(0)}" y2="${y(0)}" stroke="var(--line)"/>
+    <text x="0" y="${y(mx)+4}">${eur(mx)}</text><text x="0" y="${y(mn)+4}">${eur(mn)}</text>
+    <path d="${path(ex)}" fill="none" stroke="var(--muted)" stroke-width="2" stroke-dasharray="6 5"/>
+    <path d="${path(act)}" fill="none" stroke="${c>=0?'var(--pos)':'var(--neg)'}" stroke-width="2.5"/>
+    <text x="${P}" y="${H-6}">Solid: actual profit. Dashed: expected profit from edge. Bet ${s.length}.</text></svg></div>`;
+}
+
+$('filter').onchange=render;
+function download(name,text,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click()}
+$('exportCsv').onclick=()=>{
+  const h=['date','event','market','book','pick','odds','fair_p','edge','stake','closing_odds','clv','result','pl','real'];
+  const rows=S.bets.map(b=>[b.date,b.event,b.market,b.book,b.pick,b.odds,b.p.toFixed(4),b.edge.toFixed(4),b.stake,b.closeTxt,b.clv==null?'':b.clv.toFixed(4),b.result,b.pl.toFixed(2),b.real]);
+  const csv=[h].concat(rows).map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  navigator.clipboard?.writeText(csv).then(()=>alert('CSV copied to clipboard. Paste it into a spreadsheet.'),()=>download('bets.csv',csv,'text/csv'));
+};
+$('exportJson').onclick=()=>{const t=JSON.stringify(S);navigator.clipboard?.writeText(t).then(()=>alert('Backup copied. Paste it somewhere safe.'),()=>prompt('Copy this backup:',t))};
+$('importJson').onclick=()=>{const t=prompt('Paste a backup to replace all current data:');if(!t)return;
+  try{const s=JSON.parse(t);if(!Array.isArray(s.bets))throw 0;S=s;save();location.reload()}catch(e){alert('That backup could not be read. Check you pasted the whole text.')}};
+
+buildOutcomes(3,false);render();
+</script>
+</body>
+</html>
